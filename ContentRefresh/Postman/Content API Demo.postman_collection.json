@@ -1,0 +1,1153 @@
+{
+  "info": {
+    "_postman_id": "3aa38881-b8ee-41b1-b814-a83b48f8f727",
+    "name": "Content API Demo",
+    "description": "StartFragment\n\n# Sitecore AI Content Migration API — Postman Collection\n\nThis Postman collection demonstrates how to move content between Sitecore AI environments using the **Content Transfer API** and **Item Transfer API**.\n\nThe collection follows the same sequence used by an application or automation pipeline:\n\n``` text\nSource Sitecore AI Environment\n        │\n        │  Content Transfer API\n        ▼\n   Exported Content\n        │\n        │  Chunked Transfer\n        ▼\nDestination Sitecore AI Environment\n        │\n        │  Item Transfer API\n        ▼\n   Imported Content\n\n ```\n\nThe collection is intended both as a working example and as a starting point for building automated migration tooling.\n\n## Sitecore Documentation\n\n- Content Transfer API: [https://api-docs.sitecore.com/sai/content-transfer-api](https://api-docs.sitecore.com/sai/content-transfer-api)\n    \n- Item Transfer API: [https://api-docs.sitecore.com/sai/item-transfer-api](https://api-docs.sitecore.com/sai/item-transfer-api)\n    \n\n---\n\n# Before You Begin\n\nYou need access to two Sitecore AI environments:\n\n- **Source environment** — contains the content you want to export.\n    \n- **Destination environment** — receives the exported content.\n    \n\nYou also need **automation client credentials** that provide access to each environment.\n\nSitecore's migration APIs require the appropriate Sitecore AI administrative permissions. Creating environment automation credentials requires an Organization Admin or Organization Owner.\n\n---\n\n# Postman Environment\n\nThe collection uses Postman environment variables so that the same requests can be reused against different Sitecore AI environments.\n\nThere are three kinds of variables in the collection:\n\n1. **Configuration variables** — you populate these before running the collection.\n    \n2. **Authentication variables** — obtained by authenticating with Sitecore Cloud.\n    \n3. **Transfer variables** — generated while a transfer is running.\n    \n\nYou should not need to manually invent values for variables in categories 2 or 3.\n\n---\n\n# 1\\. Configuration Variables\n\nThese variables identify the environments and provide the credentials required to authenticate.\n\n## Source Environment\n\n### `sourceHost`\n\n**What it is**\n\nThe hostname of the Sitecore AI environment containing the content you want to export.\n\nExample:\n\n``` text\nmy-project-dev.sitecorecloud.io\n\n ```\n\n**Where to get it**\n\nIn SitecoreAI Deploy:\n\n``` text\nProjects\n  → <Project>\n    → Authoring environments\n      → <Source Environment>\n        → Details\n          → Environment host name\n\n ```\n\nUse the **environment host name**, not the public website hostname or Experience Edge endpoint.\n\nThe Content Transfer API requests are sent to this environment.\n\n---\n\n### `sourceClientId`\n\n**What it is**\n\nThe OAuth client ID used to authenticate API requests against the source environment.\n\n**Where to get it**\n\nIn SitecoreAI Deploy:\n\n``` text\nCredentials\n  → Environment\n    → Create credentials\n      → Automation\n\n ```\n\nSelect the source project and environment when creating the credential.\n\nSitecore displays a **Client ID** and **Client Secret** after creating the automation client.\n\nCopy both values when they are created.\n\n---\n\n### `sourceClientSecret`\n\n**What it is**\n\nThe OAuth client secret associated with `sourceClientId`.\n\n**Important**\n\nSitecore displays the client secret only when the credential is created.\n\nIf the secret has been lost, it cannot be retrieved. Create another automation client.\n\nTreat this value as a password. It should normally be stored as a Postman secret/sensitive value and should not be committed to source control.\n\n---\n\n## Destination Environment\n\nThe destination environment requires its own equivalent configuration.\n\n### `destinationHost`\n\n**What it is**\n\nThe Sitecore AI environment hostname that will receive the transferred content.\n\n**Where to get it**\n\nIn SitecoreAI Deploy:\n\n``` text\nProjects\n  → <Project>\n    → Authoring environments\n      → <Destination Environment>\n        → Details\n          → Environment host name\n\n ```\n\nExample:\n\n``` text\nmy-project-qa.sitecorecloud.io\n\n ```\n\nItem Transfer API operations that import the content are performed against this environment.\n\n---\n\n### `destinationClientId`\n\nThe automation client ID associated with the destination environment.\n\nCreate it from:\n\n``` text\nSitecoreAI Deploy\n  → Credentials\n    → Environment\n      → Create credentials\n        → Automation\n\n ```\n\nSelect the destination environment.\n\n---\n\n### `destinationClientSecret`\n\nThe secret associated with `destinationClientId`.\n\nAs with the source secret, Sitecore displays this value only when the automation client is created.\n\nDo not commit it to source control.\n\n---\n\n# 2\\. Authentication Variables\n\nThe Client ID and Client Secret are **not sent directly to the Content Transfer or Item Transfer APIs**.\n\nThey are exchanged for a JSON Web Token (JWT).\n\nAuthentication uses the Sitecore Cloud authorization server:\n\n``` text\nPOST https://auth.sitecorecloud.io/oauth/token\n\n ```\n\nusing:\n\n``` text\ngrant_type=client_credentials\naudience=https://api.sitecorecloud.io\nclient_id=<environment client ID>\nclient_secret=<environment client secret>\n\n ```\n\nThe response contains:\n\n``` json\n{\n  \"access_token\": \"...\",\n  \"scope\": \"xmcloud.cm:admin\",\n  \"expires_in\": 86400,\n  \"token_type\": \"Bearer\"\n}\n\n ```\n\nThe access token is then sent with API requests:\n\n``` http\nAuthorization: Bearer <access_token>\n\n ```\n\nSitecore currently issues these tokens with a lifetime of **86,400 seconds (24 hours)**.\n\nIf previously working requests begin returning `401 Unauthorized`, check whether the token has expired before troubleshooting the migration itself.\n\n---\n\n### `sourceToken`\n\nJWT used when calling the Content Transfer API on the source environment.\n\n**Do not manually create this value.**\n\nIt is obtained by authenticating with:\n\n``` text\nsourceClientId\n+\nsourceClientSecret\n\n ```\n\nagainst the Sitecore Cloud authorization endpoint.\n\n---\n\n### `destinationToken`\n\nJWT used when calling the destination environment.\n\nIt is obtained using:\n\n``` text\ndestinationClientId\n+\ndestinationClientSecret\n\n ```\n\nThese are deliberately separate variables because the source and destination can use different environment-scoped automation clients.\n\n---\n\n# 3\\. Migration Configuration\n\nThese variables describe what is being migrated.\n\n### `database`\n\nThe Sitecore database involved in the transfer.\n\nFor normal authoring-content migration this will generally be:\n\n``` text\nmaster\n\n ```\n\nUnless you have a specific reason to change it, leave this as `master`.\n\n---\n\n### Item Path\n\nThe transfer request identifies one or more Sitecore content trees to export.\n\nFor example:\n\n``` text\n/sitecore/content/Demo Site/News\n\n ```\n\nThis is an **item path inside Sitecore**, not a URL.\n\nA transfer can contain multiple `DataTrees`, allowing several content locations to be included in a single transfer operation.\n\nEach data tree specifies an item path and a scope.\n\n---\n\n### Scope\n\nScope determines how much of the selected content tree is exported.\n\nFor example:\n\n``` json\n{\n  \"ItemPath\": \"/sitecore/content/Demo Site/News\",\n  \"Scope\": \"SingleItem\"\n}\n\n ```\n\nexports only the specified item.\n\nUsing:\n\n``` json\n{\n  \"ItemPath\": \"/sitecore/content/Demo Site/News\",\n  \"Scope\": \"ItemAndDescendants\"\n}\n\n ```\n\nexports the item and its descendants.\n\nConceptually:\n\n``` text\nNews\n├── Article A\n├── Article B\n└── 2025\n    ├── Article C\n    └── Article D\n\n ```\n\n`SingleItem` transfers:\n\n``` text\nNews\n\n ```\n\n`ItemAndDescendants` transfers:\n\n``` text\nNews\n├── Article A\n├── Article B\n└── 2025\n    ├── Article C\n    └── Article D\n\n ```\n\nChoose this deliberately. Selecting a high-level item with `ItemAndDescendants` can result in a much larger transfer than intended.\n\n---\n\n# 4\\. Runtime Transfer Variables\n\nThe remaining variables represent the state of a particular migration.\n\nThese generally should **not** be populated from SitecoreAI Deploy.\n\nThey come from either:\n\n- values created when starting the transfer, or\n    \n- responses returned by earlier API calls.\n    \n\nThis creates a dependency chain:\n\n``` text\nCreate Transfer\n      │\n      ▼\n transferId\n      │\n      ▼\nGet Transfer Information\n      │\n      ▼\n chunkSetId\n      │\n      ▼\nGet Chunks\n      │\n      ▼\n   chunkId\n      │\n      ▼\nTransfer Chunk\n      │\n      ▼\nComplete Chunk Set\n      │\n      ▼\n    .raif\n      │\n      ▼\nItem Transfer API\n\n ```\n\n---\n\n### `transferId`\n\nIdentifies one complete content-transfer operation.\n\nUnlike most runtime identifiers, this value is **chosen by the caller** when creating the transfer.\n\nIt must be a unique UUID.\n\nExample:\n\n``` text\n9f84702d-c74d-4ea6-bb7a-d36788481bd8\n\n ```\n\nFor a manual Postman demonstration, you can generate a UUID before creating the transfer.\n\nFor automation, your application should generate a new UUID for each transfer operation.\n\nThe same `transferId` is then used by subsequent Content Transfer API requests referring to that operation.\n\n---\n\n### `chunkSetId`\n\nIdentifies one chunk set belonging to the transfer.\n\nYou do **not** obtain this value from SitecoreAI Deploy and you should not invent it.\n\nIt is returned by the Content Transfer API after the transfer has been processed.\n\nA transfer contains at least one chunk set, and each nominated data tree is represented by a chunk set.\n\nFor example:\n\n``` text\nTransfer\n│\n├── Chunk Set A\n│   └── /sitecore/content/Demo Site/News\n│\n└── Chunk Set B\n    └── /sitecore/content/Demo Site/Products\n\n ```\n\nIf your transfer contains multiple data trees, your automation must account for multiple chunk sets.\n\n---\n\n### `chunkId`\n\nIdentifies an individual chunk within a chunk set.\n\nLarge content trees are streamed in pieces rather than being transferred as one potentially enormous HTTP payload.\n\nConceptually:\n\n``` text\nChunk Set\n│\n├── Chunk 0\n├── Chunk 1\n├── Chunk 2\n└── Chunk 3\n\n ```\n\nThe API provides the chunk identifiers.\n\nYour application retrieves each chunk and transfers it to the destination.\n\nDo not assume that a transfer contains only one chunk.\n\n---\n\n### Blob / RAIF Identifier\n\nAfter all chunks for a chunk set have been transferred and the chunk set is finalized, the destination represents the transferred data as a `.raif` file.\n\nRAIF is the package format used by the Item Transfer API.\n\nThe important conceptual boundary is:\n\n``` text\nContent Transfer API\n        │\n        │ moves chunked data\n        ▼\n      .raif\n        │\n        │ consumed by\n        ▼\nItem Transfer API\n\n ```\n\nAt this point the content has successfully reached the destination environment, but it has **not necessarily been imported into the Sitecore content tree yet**.\n\nThe Item Transfer API performs that operation.\n\n---\n\n# Complete Variable Reference\n\n| Variable | Supplied by | Purpose |\n| --- | --- | --- |\n| `sourceHost` | Developer / SitecoreAI Deploy | Source API hostname |\n| `sourceClientId` | SitecoreAI Deploy credentials | Authenticate to source |\n| `sourceClientSecret` | SitecoreAI Deploy credentials | Authenticate to source |\n| `sourceToken` | OAuth response | Authorize source API requests |\n| `destinationHost` | Developer / SitecoreAI Deploy | Destination API hostname |\n| `destinationClientId` | SitecoreAI Deploy credentials | Authenticate to destination |\n| `destinationClientSecret` | SitecoreAI Deploy credentials | Authenticate to destination |\n| `destinationToken` | OAuth response | Authorize destination API requests |\n| `database` | Developer | Sitecore database, normally `master` |\n| `transferId` | Developer/application | Identifies the transfer operation |\n| `chunkSetId` | Content Transfer API | Identifies a generated content-tree chunk set |\n| `chunkId` | Content Transfer API | Identifies an individual data chunk |\n| Blob/RAIF identifier | Transfer API response | Identifies content ready for Item Transfer |\n\n---\n\n# Initial Setup Checklist\n\nBefore running the migration requests, your Postman environment should contain at least:\n\n``` text\nsourceHost              ✓\nsourceClientId          ✓\nsourceClientSecret      ✓\ndestinationHost         ✓\ndestinationClientId     ✓\ndestinationClientSecret ✓\ndatabase                master\n\n ```\n\nYou should **not** need to pre-populate:\n\n``` text\nsourceToken\ndestinationToken\nchunkSetId\nchunkId\nRAIF/blob identifiers\n\n ```\n\nThose values are obtained as the workflow executes.\n\n`transferId` is the exception: it is runtime state, but the caller generates it when creating the transfer.\n\n---\n\n# Authentication\n\nAuthenticate to the **source** environment first.\n\nThe collection exchanges:\n\n``` text\nsourceClientId\nsourceClientSecret\n\n ```\n\nfor:\n\n``` text\nsourceToken\n\n ```\n\nThen authenticate to the **destination** environment:\n\n``` text\ndestinationClientId\ndestinationClientSecret\n\n ```\n\nto obtain:\n\n``` text\ndestinationToken\n\n ```\n\nOnce both tokens exist, the migration workflow can begin.\n\n---\n\n# Migration Workflow\n\n## Phase 1 — Create the Export\n\nUse the Content Transfer API against the **source environment**.\n\nCreate a transfer containing one or more `DataTrees`.\n\nFor each tree, specify:\n\n- Sitecore item path\n    \n- Scope\n    \n- Merge behavior\n    \n\nThe API begins an asynchronous export operation.\n\n---\n\n## Phase 2 — Monitor the Export\n\nQuery the transfer until processing completes.\n\nThe API generates one or more chunk sets.\n\nDo not begin transferring chunk data until the export is ready.\n\n---\n\n## Phase 3 — Transfer the Chunks\n\nFor every chunk set:\n\n1. Retrieve the chunk information.\n    \n2. Retrieve each chunk from the source.\n    \n3. Upload each chunk to the destination.\n    \n4. Verify that every chunk has been transferred.\n    \n5. Complete the chunk set.\n    \n\nThe important detail for automation is that both levels can have cardinality greater than one:\n\n``` text\nTransfer\n│\n├── Chunk Set 1\n│   ├── Chunk 1\n│   ├── Chunk 2\n│   └── Chunk 3\n│\n└── Chunk Set 2\n    ├── Chunk 1\n    └── Chunk 2\n\n ```\n\nA production implementation should therefore iterate over chunk sets and chunks rather than assuming one of each.\n\n---\n\n## Phase 4 — Consume the RAIF\n\nAfter a chunk set is complete, its content is available in the destination as a `.raif` source.\n\nUse the Item Transfer API against the **destination environment** to consume that source.\n\nThis is the point where the transferred data becomes an Item Transfer operation rather than simply transported data.\n\n---\n\n## Phase 5 — Monitor the Import\n\nItem Transfer processing is asynchronous.\n\nMonitor the resulting operation until it reaches a terminal state.\n\nDo not treat a successful upload of the `.raif` as proof that the Sitecore content import itself has completed successfully.\n\n---\n\n## Phase 6 — Verify\n\nAfter the Item Transfer operation completes, verify the resulting content in the destination.\n\nAt minimum, check:\n\n- Expected root items exist.\n    \n- Expected descendants exist.\n    \n- Item versions and languages were transferred as expected.\n    \n- Field values are correct.\n    \n- References resolve as expected.\n    \n- Media used by the migrated content is present where applicable.\n    \n\n---\n\n# Security\n\nAutomation client secrets and access tokens are credentials.\n\nDo not:\n\n- commit client secrets to Git;\n    \n- export a Postman environment containing secrets and commit it;\n    \n- paste production credentials into documentation;\n    \n- log access tokens unnecessarily.\n    \n\nFor shared Postman environments, use Postman's secret/sensitive-value functionality where appropriate.\n\nFor CI/CD or custom automation, store credentials in the platform's secret-management facility rather than source-controlled configuration.\n\n---\n\n# Troubleshooting\n\n## `401 Unauthorized`\n\nThe access token may have expired.\n\nSitecore JWTs obtained through the documented client-credentials flow currently expire after 24 hours.\n\nRequest a new token and retry.\n\nAlso verify that the Client ID and Client Secret belong to the environment being called.\n\n---\n\n## `403 Forbidden`\n\nAuthentication succeeded, but the client or user does not have sufficient permissions for the operation.\n\nVerify the automation client's environment and the permissions required by the migration APIs.\n\n---\n\n## Source requests work but destination requests fail\n\nRemember that these are two independently secured environments.\n\nA valid source token does not imply that it is valid for the destination environment.\n\nVerify:\n\n``` text\nsource credentials      → source environment\ndestination credentials → destination environment\n\n ```\n\n---\n\n## Transfer succeeds but content does not appear\n\nDistinguish between:\n\n``` text\nData successfully transferred to destination\n\n ```\n\nand:\n\n``` text\nRAIF successfully consumed into Sitecore\n\n ```\n\nCompleting the Content Transfer portion does not by itself mean that the Item Transfer operation has completed.\n\nCheck the Item Transfer operation status.\n\n---\n\n# API Documentation\n\nFor the authoritative endpoint definitions, request/response schemas, and currently supported options, use the Sitecore API documentation:\n\n- Content Transfer API: [https://api-docs.sitecore.com/sai/content-transfer-api](https://api-docs.sitecore.com/sai/content-transfer-api)\n    \n- Item Transfer API: [https://api-docs.sitecore.com/sai/item-transfer-api](https://api-docs.sitecore.com/sai/item-transfer-api)\n    \n\nThe Postman collection demonstrates the workflow; the API specifications remain the authoritative reference for individual endpoints and schemas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "52506150",
+    "_collection_link": "https://go.postman.co/collection/52506150-3aa38881-b8ee-41b1-b814-a83b48f8f727?source=collection_link"
+  },
+  "item": [
+    {
+      "name": "Get JWT from Source",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const body = pm.response.json();\r",
+              "\r",
+              "if (!body.access_token) {\r",
+              "    console.error(body);\r",
+              "    throw new Error(\"Authentication response did not contain access_token.\");\r",
+              "}\r",
+              "\r",
+              "pm.environment.set(\"sourceJwt\", body.access_token);\r",
+              "\r",
+              "console.log(`Stored source JWT; expires in ${body.expires_in} seconds.`);"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "client_id",
+              "value": "{{sourceClientId}}",
+              "type": "text",
+              "uuid": "8bf2e828-82bc-4dd6-a840-6f50f1c45dd2"
+            },
+            {
+              "key": "client_secret",
+              "value": "{{sourceClientSecret}}",
+              "type": "text",
+              "uuid": "e150b622-8f6f-4456-b723-dfdb4ba262d0"
+            },
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text",
+              "uuid": "c011f881-3b9d-4d48-a02f-f6d66391f992"
+            },
+            {
+              "key": "audience",
+              "value": "{{audience}}",
+              "type": "text",
+              "uuid": "36647af1-62b3-4b44-8512-728c091b2de3"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{authUrl}}",
+          "host": [
+            "{{authUrl}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "Get JWT from Destination",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const body = pm.response.json();\r",
+              "\r",
+              "if (!body.access_token) {\r",
+              "    console.error(body);\r",
+              "    throw new Error(\"Authentication response did not contain access_token.\");\r",
+              "}\r",
+              "\r",
+              "pm.environment.set(\"destinationJwt\", body.access_token);\r",
+              "\r",
+              "console.log(`Stored source JWT; expires in ${body.expires_in} seconds.`);"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "noauth"
+        },
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "urlencoded",
+          "urlencoded": [
+            {
+              "key": "client_id",
+              "value": "{{destinationClientId}}",
+              "type": "text",
+              "uuid": "8bf2e828-82bc-4dd6-a840-6f50f1c45dd2"
+            },
+            {
+              "key": "client_secret",
+              "value": "{{destinationClientSecret}}",
+              "type": "text",
+              "uuid": "e150b622-8f6f-4456-b723-dfdb4ba262d0"
+            },
+            {
+              "key": "grant_type",
+              "value": "client_credentials",
+              "type": "text",
+              "uuid": "c011f881-3b9d-4d48-a02f-f6d66391f992"
+            },
+            {
+              "key": "audience",
+              "value": "{{audience}}",
+              "type": "text",
+              "uuid": "36647af1-62b3-4b44-8512-728c091b2de3"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{authUrl}}",
+          "host": [
+            "{{authUrl}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "01 - Create Source Transfer",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const transferId = pm.variables.replaceIn(\"{{$guid}}\");\r",
+              "\r",
+              "pm.environment.set(\"transferId\", transferId);\r",
+              "\r",
+              "console.log(`Transfer ID: ${transferId}`);"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{sourceJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\r\n  \"TransferId\": \"{{transferId}}\",\r\n  \"Configuration\": {\r\n    \"DataTrees\": [\r\n      {\r\n        \"ItemPath\": \"{{sourceItemPath}}\",\r\n        \"Scope\": \"ItemAndDescendants\",\r\n        \"MergeStrategy\": \"OverrideExistingItem\"\r\n      }\r\n    ],\r\n    \"Database\": \"{{databaseName}}\"\r\n  }\r\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{sourceBaseUrl}}/sitecore/api/content/transfer/v1/transfers",
+          "host": [
+            "{{sourceBaseUrl}}"
+          ],
+          "path": [
+            "sitecore",
+            "api",
+            "content",
+            "transfer",
+            "v1",
+            "transfers"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "02 - Get Source Transfer Status",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const body = pm.response.json();\r",
+              "\r",
+              "const state = body.State ?? body.state;\r",
+              "console.log(`Transfer state: ${state}`);\r",
+              "\r",
+              "if (state === \"Failed\") {\r",
+              "    throw new Error(\"The source transfer failed.\");\r",
+              "}\r",
+              "\r",
+              "if (state !== \"Completed\") {\r",
+              "    return;\r",
+              "}\r",
+              "\r",
+              "const metadata =\r",
+              "    body.ChunkSetsMetadata ??\r",
+              "    body.chunkSetsMetadata;\r",
+              "\r",
+              "if (!Array.isArray(metadata) || metadata.length === 0) {\r",
+              "    throw new Error(\r",
+              "        \"Transfer completed without chunk-set metadata.\"\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "const manifest = metadata.map((set) => {\r",
+              "    const chunkSetId =\r",
+              "        set.ChunkSetId ??\r",
+              "        set.chunkSetId;\r",
+              "\r",
+              "    const chunkCount =\r",
+              "        set.ChunkCount ??\r",
+              "        set.chunkCount;\r",
+              "\r",
+              "    if (!chunkSetId) {\r",
+              "        throw new Error(\r",
+              "            \"A chunk set did not contain ChunkSetId.\"\r",
+              "        );\r",
+              "    }\r",
+              "\r",
+              "    if (!Number.isInteger(chunkCount) || chunkCount < 1) {\r",
+              "        throw new Error(\r",
+              "            `Invalid ChunkCount for chunk set ${chunkSetId}.`\r",
+              "        );\r",
+              "    }\r",
+              "\r",
+              "    return {\r",
+              "        chunkSetId,\r",
+              "        chunkCount,\r",
+              "        chunks: Array.from(\r",
+              "            { length: chunkCount },\r",
+              "            (_, chunkId) => ({\r",
+              "                chunkId,\r",
+              "                isMedia: null,\r",
+              "                fileName:\r",
+              "                    `${chunkSetId}-chunk-${chunkId}.bin`\r",
+              "            })\r",
+              "        )\r",
+              "    };\r",
+              "});\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"chunkManifest\",\r",
+              "    JSON.stringify(manifest)\r",
+              ");\r",
+              "\r",
+              "pm.environment.set(\"currentChunkSetIndex\", \"0\");\r",
+              "pm.environment.set(\"currentChunkIndex\", \"0\");\r",
+              "\r",
+              "console.log(\r",
+              "    `Stored ${manifest.length} chunk set(s):`,\r",
+              "    manifest\r",
+              ");"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{sourceJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{sourceBaseUrl}}/sitecore/api/content/transfer/v1/transfers/{{transferId}}/status",
+          "host": [
+            "{{sourceBaseUrl}}"
+          ],
+          "path": [
+            "sitecore",
+            "api",
+            "content",
+            "transfer",
+            "v1",
+            "transfers",
+            "{{transferId}}",
+            "status"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "03 - Download Source Chunk",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "function parseBoolean(value) {\r",
+              "    if (value === null || value === undefined) {\r",
+              "        return null;\r",
+              "    }\r",
+              "\r",
+              "    const normalized = String(value)\r",
+              "        .trim()\r",
+              "        .toLowerCase();\r",
+              "\r",
+              "    if (normalized === \"true\") {\r",
+              "        return true;\r",
+              "    }\r",
+              "\r",
+              "    if (normalized === \"false\") {\r",
+              "        return false;\r",
+              "    }\r",
+              "\r",
+              "    return null;\r",
+              "}\r",
+              "\r",
+              "function getIsMedia() {\r",
+              "    // First check whether the API exposes it as a\r",
+              "    // dedicated response header.\r",
+              "    const candidateHeaders = [\r",
+              "        \"IsMedia\",\r",
+              "        \"isMedia\",\r",
+              "        \"X-Is-Media\",\r",
+              "        \"X-IsMedia\"\r",
+              "    ];\r",
+              "\r",
+              "    for (const name of candidateHeaders) {\r",
+              "        const parsed = parseBoolean(\r",
+              "            pm.response.headers.get(name)\r",
+              "        );\r",
+              "\r",
+              "        if (parsed !== null) {\r",
+              "            return parsed;\r",
+              "        }\r",
+              "    }\r",
+              "\r",
+              "    // Otherwise parse it from Content-Disposition.\r",
+              "    const disposition =\r",
+              "        pm.response.headers.get(\"Content-Disposition\");\r",
+              "\r",
+              "    if (disposition) {\r",
+              "        const match = disposition.match(\r",
+              "            /isMedia\\s*=\\s*\"?([^\";,\\s]+)\"?/i\r",
+              "        );\r",
+              "\r",
+              "        if (match) {\r",
+              "            const parsed = parseBoolean(match[1]);\r",
+              "\r",
+              "            if (parsed !== null) {\r",
+              "                return parsed;\r",
+              "            }\r",
+              "        }\r",
+              "    }\r",
+              "\r",
+              "    throw new Error(\r",
+              "        \"Could not determine IsMedia from the response headers.\"\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "const manifest = JSON.parse(\r",
+              "    pm.environment.get(\"chunkManifest\")\r",
+              ");\r",
+              "\r",
+              "const setIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkSetIndex\")\r",
+              ");\r",
+              "\r",
+              "const chunkIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkIndex\")\r",
+              ");\r",
+              "\r",
+              "const isMedia = getIsMedia();\r",
+              "\r",
+              "manifest[setIndex]\r",
+              "    .chunks[chunkIndex]\r",
+              "    .isMedia = isMedia;\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"chunkManifest\",\r",
+              "    JSON.stringify(manifest)\r",
+              ");\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"currentIsMedia\",\r",
+              "    String(isMedia)\r",
+              ");\r",
+              "\r",
+              "console.log(\r",
+              "    `Recorded isMedia=${isMedia} for ` +\r",
+              "    `chunk set ${manifest[setIndex].chunkSetId}, ` +\r",
+              "    `chunk ${manifest[setIndex].chunks[chunkIndex].chunkId}`\r",
+              ");\r",
+              "\r",
+              "console.log(\r",
+              "    `Save the response as: ` +\r",
+              "    manifest[setIndex].chunks[chunkIndex].fileName\r",
+              ");"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "function getManifest() {\r",
+              "    const raw = pm.environment.get(\"chunkManifest\");\r",
+              "\r",
+              "    if (!raw) {\r",
+              "        throw new Error(\r",
+              "            \"chunkManifest is empty. Complete the source transfer first.\"\r",
+              "        );\r",
+              "    }\r",
+              "\r",
+              "    return JSON.parse(raw);\r",
+              "}\r",
+              "\r",
+              "const manifest = getManifest();\r",
+              "\r",
+              "const setIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkSetIndex\") ?? 0\r",
+              ");\r",
+              "\r",
+              "const chunkIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkIndex\") ?? 0\r",
+              ");\r",
+              "\r",
+              "const chunkSet = manifest[setIndex];\r",
+              "\r",
+              "if (!chunkSet) {\r",
+              "    throw new Error(\r",
+              "        `No chunk set exists at index ${setIndex}.`\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "const chunk = chunkSet.chunks[chunkIndex];\r",
+              "\r",
+              "if (!chunk) {\r",
+              "    throw new Error(\r",
+              "        `No chunk exists at index ${chunkIndex} ` +\r",
+              "        `in chunk set ${chunkSet.chunkSetId}.`\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"currentChunkSetId\",\r",
+              "    chunkSet.chunkSetId\r",
+              ");\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"currentChunkCount\",\r",
+              "    String(chunkSet.chunkCount)\r",
+              ");\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"currentChunkId\",\r",
+              "    String(chunk.chunkId)\r",
+              ");\r",
+              "\r",
+              "console.log(\r",
+              "    `Downloading chunk set ${setIndex + 1}/${manifest.length}, ` +\r",
+              "    `chunk ${chunkIndex + 1}/${chunkSet.chunkCount}`\r",
+              ");\r",
+              "\r",
+              "console.log(`Save as: ${chunk.fileName}`);"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{sourceJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{sourceBaseUrl}}/sitecore/api/content/transfer/v1/transfers/{{transferId}}/chunksets/{{currentChunkSetId}}/chunks/{{currentChunkId}}",
+          "host": [
+            "{{sourceBaseUrl}}"
+          ],
+          "path": [
+            "sitecore",
+            "api",
+            "content",
+            "transfer",
+            "v1",
+            "transfers",
+            "{{transferId}}",
+            "chunksets",
+            "{{currentChunkSetId}}",
+            "chunks",
+            "{{currentChunkId}}"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "04 - Upload Chunk to Destination",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code < 200 || pm.response.code >= 300) {\r",
+              "    throw new Error(\r",
+              "        `Chunk upload failed with HTTP ${pm.response.code}.`\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "const rawManifest = pm.environment.get(\"chunkManifest\");\r",
+              "\r",
+              "if (!rawManifest) {\r",
+              "    throw new Error(\"chunkManifest is empty.\");\r",
+              "}\r",
+              "\r",
+              "const manifest = JSON.parse(rawManifest);\r",
+              "\r",
+              "const setIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkSetIndex\") ?? 0\r",
+              ");\r",
+              "\r",
+              "const chunkIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkIndex\") ?? 0\r",
+              ");\r",
+              "\r",
+              "const chunkSet = manifest[setIndex];\r",
+              "const chunk = chunkSet?.chunks[chunkIndex];\r",
+              "\r",
+              "if (!chunkSet || !chunk) {\r",
+              "    throw new Error(\r",
+              "        `Could not locate chunk set ${setIndex}, chunk ${chunkIndex}.`\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "chunk.uploaded = true;\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"chunkManifest\",\r",
+              "    JSON.stringify(manifest)\r",
+              ");\r",
+              "\r",
+              "console.log(\r",
+              "    `Uploaded chunk ${chunk.chunkId + 1} of ` +\r",
+              "    `${chunkSet.chunkCount} for chunk set ${chunkSet.chunkSetId}.`\r",
+              ");\r",
+              "\r",
+              "const nextChunkIndex = chunkIndex + 1;\r",
+              "\r",
+              "if (nextChunkIndex < chunkSet.chunkCount) {\r",
+              "    pm.environment.set(\r",
+              "        \"currentChunkIndex\",\r",
+              "        String(nextChunkIndex)\r",
+              "    );\r",
+              "\r",
+              "    pm.environment.set(\r",
+              "        \"chunkSetReadyToComplete\",\r",
+              "        \"false\"\r",
+              "    );\r",
+              "\r",
+              "    const nextChunk = chunkSet.chunks[nextChunkIndex];\r",
+              "\r",
+              "    console.log(\r",
+              "        `Next: download chunk ${nextChunk.chunkId}.`\r",
+              "    );\r",
+              "\r",
+              "    console.log(\r",
+              "        `Save it as: ${nextChunk.fileName}`\r",
+              "    );\r",
+              "} else {\r",
+              "    pm.environment.set(\r",
+              "        \"chunkSetReadyToComplete\",\r",
+              "        \"true\"\r",
+              "    );\r",
+              "\r",
+              "    console.log(\r",
+              "        `All ${chunkSet.chunkCount} chunks have been uploaded ` +\r",
+              "        `for chunk set ${chunkSet.chunkSetId}.`\r",
+              "    );\r",
+              "\r",
+              "    console.log(\r",
+              "        \"Run 05 - Complete Destination Chunk Set.\"\r",
+              "    );\r",
+              "}"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const rawManifest = pm.environment.get(\"chunkManifest\");\r",
+              "\r",
+              "if (!rawManifest) {\r",
+              "    throw new Error(\"chunkManifest is empty.\");\r",
+              "}\r",
+              "\r",
+              "const manifest = JSON.parse(rawManifest);\r",
+              "\r",
+              "const setIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkSetIndex\") ?? 0\r",
+              ");\r",
+              "\r",
+              "const chunkIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkIndex\") ?? 0\r",
+              ");\r",
+              "\r",
+              "const chunkSet = manifest[setIndex];\r",
+              "const chunk = chunkSet?.chunks[chunkIndex];\r",
+              "\r",
+              "if (!chunkSet || !chunk) {\r",
+              "    throw new Error(\r",
+              "        \"The current chunk could not be found in chunkManifest.\"\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "if (typeof chunk.isMedia !== \"boolean\") {\r",
+              "    throw new Error(\r",
+              "        `Chunk ${chunk.chunkId} has no isMedia value. ` +\r",
+              "        `Run Download Source Chunk first.`\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"currentChunkSetId\",\r",
+              "    chunkSet.chunkSetId\r",
+              ");\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"currentChunkId\",\r",
+              "    String(chunk.chunkId)\r",
+              ");\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"currentIsMedia\",\r",
+              "    String(chunk.isMedia)\r",
+              ");\r",
+              "\r",
+              "console.log(\r",
+              "    `Uploading chunk ${chunk.chunkId + 1} of ` +\r",
+              "    `${chunkSet.chunkCount}.`\r",
+              ");\r",
+              "\r",
+              "console.log(\r",
+              "    `Expected file: ${chunk.fileName}`\r",
+              ");\r",
+              "\r",
+              "console.log(\r",
+              "    `isMedia=${chunk.isMedia}`\r",
+              ");"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{destinationJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "file",
+          "file": {
+            "src": "/C:/Users/RobbWilliams/Downloads/8a875aef-f250-4d0c-af71-42f070a98fac-chunk-0.bin"
+          }
+        },
+        "url": {
+          "raw": "{{destinationBaseUrl}}/sitecore/api/content/transfer/v1/transfers/{{transferId}}/chunksets/{{currentChunkSetId}}/chunks/{{currentChunkId}}?isMedia={{currentIsMedia}}",
+          "host": [
+            "{{destinationBaseUrl}}"
+          ],
+          "path": [
+            "sitecore",
+            "api",
+            "content",
+            "transfer",
+            "v1",
+            "transfers",
+            "{{transferId}}",
+            "chunksets",
+            "{{currentChunkSetId}}",
+            "chunks",
+            "{{currentChunkId}}"
+          ],
+          "query": [
+            {
+              "key": "isMedia",
+              "value": "{{currentIsMedia}}"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "05 - Complete Destination Chunk Set",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code < 200 || pm.response.code >= 300) {\r",
+              "    throw new Error(\r",
+              "        `Chunk-set completion failed with ` +\r",
+              "        `HTTP ${pm.response.code}.`\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "const body = pm.response.json();\r",
+              "\r",
+              "const fileName =\r",
+              "    body.ContentTransferFileName ??\r",
+              "    body.contentTransferFileName;\r",
+              "\r",
+              "if (!fileName) {\r",
+              "    throw new Error(\r",
+              "        \"Completion response did not contain \" +\r",
+              "        \"ContentTransferFileName.\"\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "let files = [];\r",
+              "\r",
+              "const existing =\r",
+              "    pm.environment.get(\"contentTransferFiles\");\r",
+              "\r",
+              "if (existing) {\r",
+              "    files = JSON.parse(existing);\r",
+              "}\r",
+              "\r",
+              "const manifest = JSON.parse(\r",
+              "    pm.environment.get(\"chunkManifest\")\r",
+              ");\r",
+              "\r",
+              "let setIndex = Number(\r",
+              "    pm.environment.get(\"currentChunkSetIndex\")\r",
+              ");\r",
+              "\r",
+              "files.push({\r",
+              "    chunkSetId: manifest[setIndex].chunkSetId,\r",
+              "    contentTransferFileName: fileName\r",
+              "});\r",
+              "\r",
+              "pm.environment.set(\r",
+              "    \"contentTransferFiles\",\r",
+              "    JSON.stringify(files)\r",
+              ");\r",
+              "\r",
+              "// Preserve compatibility with your current consume request.\r",
+              "pm.environment.set(\r",
+              "    \"contentTransferFileName\",\r",
+              "    fileName\r",
+              ");\r",
+              "\r",
+              "console.log(`Created transfer file: ${fileName}`);\r",
+              "\r",
+              "setIndex += 1;\r",
+              "\r",
+              "if (setIndex < manifest.length) {\r",
+              "    pm.environment.set(\r",
+              "        \"currentChunkSetIndex\",\r",
+              "        String(setIndex)\r",
+              "    );\r",
+              "\r",
+              "    pm.environment.set(\r",
+              "        \"currentChunkIndex\",\r",
+              "        \"0\"\r",
+              "    );\r",
+              "\r",
+              "    pm.environment.set(\r",
+              "        \"chunkSetReadyToComplete\",\r",
+              "        \"false\"\r",
+              "    );\r",
+              "\r",
+              "    console.log(\r",
+              "        `Advanced to chunk set ${setIndex + 1} ` +\r",
+              "        `of ${manifest.length}.`\r",
+              "    );\r",
+              "} else {\r",
+              "    pm.environment.set(\r",
+              "        \"allChunkSetsComplete\",\r",
+              "        \"true\"\r",
+              "    );\r",
+              "\r",
+              "    console.log(\"All chunk sets are complete.\");\r",
+              "}"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "const ready =\r",
+              "    pm.environment.get(\"chunkSetReadyToComplete\");\r",
+              "\r",
+              "if (ready !== \"true\") {\r",
+              "    throw new Error(\r",
+              "        \"The current chunk set is not ready to complete. \" +\r",
+              "        \"Upload all of its chunks first.\"\r",
+              "    );\r",
+              "}"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{destinationJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/octet-stream",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{destinationBaseUrl}}/sitecore/api/content/transfer/v1/transfers/{{transferId}}/chunksets/{{currentChunkSetId}}/complete",
+          "host": [
+            "{{destinationBaseUrl}}"
+          ],
+          "path": [
+            "sitecore",
+            "api",
+            "content",
+            "transfer",
+            "v1",
+            "transfers",
+            "{{transferId}}",
+            "chunksets",
+            "{{currentChunkSetId}}",
+            "complete"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "06 - List Available Transfers",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{destinationJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{destinationBaseUrl}}/sitecore/shell/api/v3/ItemsTransfer/sources/blobs",
+          "host": [
+            "{{destinationBaseUrl}}"
+          ],
+          "path": [
+            "sitecore",
+            "shell",
+            "api",
+            "v3",
+            "ItemsTransfer",
+            "sources",
+            "blobs"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "07 - Consume Transfer",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code < 200 || pm.response.code >= 300) {\r",
+              "    throw new Error(\r",
+              "        `Consume request failed with HTTP ${pm.response.code}.`\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "const location = pm.response.headers.get(\"Location\");\r",
+              "\r",
+              "if (!location) {\r",
+              "    throw new Error(\r",
+              "        \"Consume response did not include a Location header.\"\r",
+              "    );\r",
+              "}\r",
+              "\r",
+              "pm.environment.set(\"itemTransferStatusUrl\", location);\r",
+              "\r",
+              "console.log(`Item transfer status URL: ${location}`);"
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{destinationJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{destinationBaseUrl}}/sitecore/shell/api/v3/ItemsTransfer/transfers/databases/{{databaseName}}/sources?blobName={{contentTransferFileName}}",
+          "host": [
+            "{{destinationBaseUrl}}"
+          ],
+          "path": [
+            "sitecore",
+            "shell",
+            "api",
+            "v3",
+            "ItemsTransfer",
+            "transfers",
+            "databases",
+            "{{databaseName}}",
+            "sources"
+          ],
+          "query": [
+            {
+              "key": "blobName",
+              "value": "{{contentTransferFileName}}"
+            }
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "08 - Get Blob Status",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        },
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              ""
+            ],
+            "type": "text/javascript",
+            "packages": {},
+            "requests": {}
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{destinationJwt}}",
+              "type": "string"
+            }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{itemTransferStatusUrl}}",
+          "host": [
+            "{{itemTransferStatusUrl}}"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}

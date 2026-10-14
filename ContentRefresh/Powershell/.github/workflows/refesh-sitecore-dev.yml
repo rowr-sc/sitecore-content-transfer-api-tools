@@ -1,0 +1,68 @@
+name: Refresh Sitecore DEV from PROD
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Operation mode"
+        required: true
+        type: choice
+        default: Preview
+        options:
+          - Preview
+          - Execute
+
+      confirm:
+        description: "For Execute mode, type REFRESH exactly"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  refresh-dev:
+    name: Refresh DEV from PROD
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Preview content refresh
+        if: ${{ inputs.mode == 'Preview' }}
+        shell: powershell
+        run: |
+          & "./tools/sitecore-content-refresh/Invoke-SitecoreContentRefresh.ps1" `
+            -SourceEnvironment "PROD" `
+            -DestinationEnvironment "DEV" `
+            -ManifestPath "./tools/sitecore-content-refresh/environment-item-manifests/prod.json" `
+            -Mode "Preview"
+
+      - name: Validate execution confirmation
+        if: ${{ inputs.mode == 'Execute' }}
+        shell: powershell
+        run: |
+          if ("${{ inputs.confirm }}" -cne "REFRESH") {
+              throw "Execute mode requires confirmation. Type REFRESH exactly."
+          }
+
+      - name: Execute content refresh
+        if: ${{ inputs.mode == 'Execute' }}
+        shell: powershell
+        env:
+          SITECORE_PROD_HOST: ${{ vars.SITECORE_PROD_HOST }}
+          SITECORE_PROD_CLIENT_ID: ${{ secrets.SITECORE_PROD_CLIENT_ID }}
+          SITECORE_PROD_CLIENT_SECRET: ${{ secrets.SITECORE_PROD_CLIENT_SECRET }}
+
+          SITECORE_DEV_HOST: ${{ vars.SITECORE_DEV_HOST }}
+          SITECORE_DEV_CLIENT_ID: ${{ secrets.SITECORE_DEV_CLIENT_ID }}
+          SITECORE_DEV_CLIENT_SECRET: ${{ secrets.SITECORE_DEV_CLIENT_SECRET }}
+
+        run: |
+          & "./tools/sitecore-content-refresh/Invoke-SitecoreContentRefresh.ps1" `
+            -SourceEnvironment "PROD" `
+            -DestinationEnvironment "DEV" `
+            -ManifestPath "./tools/sitecore-content-refresh/environment-item-manifests/prod.json" `
+            -Mode "Execute" `
+            -Confirm "${{ inputs.confirm }}"

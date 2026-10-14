@@ -1,0 +1,179 @@
+﻿{
+    "File":  {
+                 "Name":  "PackageTest-Content.raif",
+                 "FullPath":  "C:\\code\\ContentRefreshProcess\\InspectRaif\\PackageTest-Content.raif",
+                 "SizeBytes":  1301,
+                 "LastWriteTimeUtc":  "\/Date(1789609083617)\/"
+             },
+    "Source":  {
+                   "Name":  "PackageTest-Content",
+                   "OriginalName":  "",
+                   "Description":  "Converted from Sitecore XM/XP Package Designer package",
+                   "Strategy":  "OverrideExistingItem",
+                   "IsTransferable":  true,
+                   "IsTransferred":  false,
+                   "Disabled":  false
+               },
+    "Summary":  {
+                    "ItemCount":  2,
+                    "EnumeratedItemCount":  2,
+                    "FieldCount":  18,
+                    "MediaCount":  null,
+                    "DuplicatedItemCount":  0,
+                    "DuplicatedBlobCount":  0
+                },
+    "DuplicatedItemIds":  [
+
+                          ],
+    "DuplicatedBlobIds":  [
+
+                          ],
+    "Items":  [
+                  {
+                      "Id":  "83596773-8c9c-41f1-8fa6-11ab593bba3a",
+                      "Name":  "Nested Sample Item",
+                      "ParentId":  "5c90ff90-3c64-4a52-b8d1-a8d42f415f0a",
+                      "TemplateId":  "76036f5e-cbce-46d1-af0a-4143f9b557aa",
+                      "MasterId":  "00000000-0000-0000-0000-000000000000",
+                      "TimeStamp":  0,
+                      "Fields":  [
+                                     {
+                                         "Id":  "5dd74568-4d4b-44c1-b513-0af5f4cda34f",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "sitecore\\superuser"
+                                     },
+                                     {
+                                         "Id":  "3e431de1-525e-47a3-b6b0-1ccbec3a8c98",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "{190B1C84-F1BE-47ED-AA41-F42193D9C8FC}"
+                                     },
+                                     {
+                                         "Id":  "badd9cf9-53e0-4d0c-bcc0-2d784c282f6a",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "sitecore\\superuser"
+                                     },
+                                     {
+                                         "Id":  "8cdc337e-a112-42fb-bbb4-4143751e123f",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "2b5c5d27-df11-484e-9bff-5fde15c1c1ed"
+                                     },
+                                     {
+                                         "Id":  "75577384-3c97-45da-a847-81b00500e250",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "Nested Sample Item"
+                                     },
+                                     {
+                                         "Id":  "25bed78c-4957-4165-998a-ca1b52f67497",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "20260812T144608Z"
+                                     },
+                                     {
+                                         "Id":  "52807595-0f8f-4b20-8d2a-cb71d28c6103",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "sitecore\\superuser"
+                                     },
+                                     {
+                                         "Id":  "d9cf14b1-fa16-4ba6-9288-e8a174d4d522",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "20260812T144608Z"
+                                     },
+                                     {
+                                         "Id":  "a4f985d9-98b3-4b52-aaaf-4344f6e747c6",
+                                         "Storage":  "Shared",
+                                         "Language":  null,
+                                         "Version":  null,
+                                         "Value":  "{A5BC37E7-ED96-4C1E-8590-A26E64DB55EA}"
+                                     }
+                                 ]
+                  },
+                  {
+                      "Id":  "5c90ff90-3c64-4a52-b8d1-a8d42f415f0a",
+                      "Name":  "Sample Item",
+                      "ParentId":  "110d559f-dea5-42ea-9c1c-8a5df7e70ef9",
+                      "TemplateId":  "76036f5e-cbce-46d1-af0a-4143f9b557aa",
+                      "MasterId":  "00000000-0000-0000-0000-000000000000",
+                      "TimeStamp":  0,
+                      "Fields":  [
+                                     {
+                                         "Id":  "5dd74568-4d4b-44c1-b513-0af5f4cda34f",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "sitecore\\superuser"
+                                     },
+                                     {
+                                         "Id":  "3e431de1-525e-47a3-b6b0-1ccbec3a8c98",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "{190B1C84-F1BE-47ED-AA41-F42193D9C8FC}"
+                                     },
+                                     {
+                                         "Id":  "badd9cf9-53e0-4d0c-bcc0-2d784c282f6a",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "sitecore\\superuser"
+                                     },
+                                     {
+                                         "Id":  "8cdc337e-a112-42fb-bbb4-4143751e123f",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "6f5885e2-8f00-43ef-8cde-f3bb2d3f3330"
+                                     },
+                                     {
+                                         "Id":  "75577384-3c97-45da-a847-81b00500e250",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "Sample Item"
+                                     },
+                                     {
+                                         "Id":  "25bed78c-4957-4165-998a-ca1b52f67497",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "20260812T144543Z"
+                                     },
+                                     {
+                                         "Id":  "52807595-0f8f-4b20-8d2a-cb71d28c6103",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "sitecore\\superuser"
+                                     },
+                                     {
+                                         "Id":  "d9cf14b1-fa16-4ba6-9288-e8a174d4d522",
+                                         "Storage":  "Versioned",
+                                         "Language":  "en",
+                                         "Version":  1,
+                                         "Value":  "20260812T144543Z"
+                                     },
+                                     {
+                                         "Id":  "a4f985d9-98b3-4b52-aaaf-4344f6e747c6",
+                                         "Storage":  "Shared",
+                                         "Language":  null,
+                                         "Version":  null,
+                                         "Value":  "{A5BC37E7-ED96-4C1E-8590-A26E64DB55EA}"
+                                     }
+                                 ]
+                  }
+              ]
+}

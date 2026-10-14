@@ -1,0 +1,10 @@
+{
+  "Database": "master",
+  "DataTrees": [
+    {
+      "ItemPath": "/sitecore/content/the-adventure-company/events/Home/TestPage",
+      "Scope": "SingleItem",
+      "MergeStrategy": "OverrideExistingItem"
+    }
+  ]
+}
